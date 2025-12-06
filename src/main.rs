@@ -17,17 +17,21 @@ fn main() {
         }
 
         // Unsure if this is supposed to be unwrap or we should check for err
-        let input: String = user_input.to_lowercase().trim().parse().unwrap();
+        let mut parts = user_input.trim().split_whitespace();
 
-        println!("{input}");
+        let command: String = parts.next().unwrap().to_string().to_lowercase();
+        let args = parts.clone();
 
-        if input == "exit" || input == "quit" {
+        let len = parts.count();
+
+        println!("{len}");
+
+        if len == 0 && (command == "exit" || command == "quit") {
             break;
         }
 
-        // This can execute a command lol, but not with arguments.
-        Command::new(input)
-            .spawn()
-            .expect("Failed to execute command");
+        let mut child = Command::new(command).args(args).spawn().unwrap();
+
+        child.wait().expect("Could not execute");
     }
 }
