@@ -1,10 +1,18 @@
 use std::{
+    env,
     io::{self, Write},
     process::Command,
 };
 
+// TODO: This program has way to many unwraps, these need to be removed and
+// handled appropriately
+
 fn main() {
     loop {
+        // Start by setting current path to home directory
+        let path = home::home_dir().unwrap();
+        env::set_current_dir(path).unwrap();
+
         let mut user_input = String::new();
         print!("> ");
 
@@ -30,6 +38,7 @@ fn main() {
             break;
         }
 
+        // This should be when we don't recognise first word as cd etc.
         let mut child = Command::new(command).args(args).spawn().unwrap();
 
         child.wait().expect("Could not execute");
