@@ -1,5 +1,5 @@
 use std::{
-    env::{self, set_current_dir},
+    env::{self, current_dir},
     io::{self, Write},
     path::Path,
     process::Command,
@@ -9,11 +9,11 @@ use std::{
 // handled appropriately
 
 fn main() {
-    loop {
-        // Start by setting current path to home directory
-        let path = home::home_dir().unwrap();
-        env::set_current_dir(path).unwrap();
+    // Start by setting current path to home directory
+    let path = home::home_dir().unwrap();
+    env::set_current_dir(path).unwrap();
 
+    loop {
         let mut user_input = String::new();
         print!("$ ");
 
@@ -28,7 +28,6 @@ fn main() {
         // Unsure if this is supposed to be unwrap or we should check for err
         let mut parts = user_input.trim().split_whitespace();
         let command: String = parts.next().unwrap().to_string().to_lowercase();
-        dbg!(&parts);
         let args = parts.clone();
         let len = parts.count();
 
@@ -44,7 +43,7 @@ fn main() {
             let new_dir = Path::new(&path_str);
             // this how you change current dir just need to construt
             // it from a string
-            match set_current_dir(new_dir) {
+            match env::set_current_dir(new_dir) {
                 Ok(_) => println!("Successfully changed current dir"),
                 Err(_) => println!("Error: directory doesnt exists"),
             };
