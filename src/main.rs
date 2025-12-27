@@ -1,5 +1,7 @@
 use std::{
+    // collections::VecDeque,
     env::{self},
+    fs::File,
     io::{self, Write},
     path::Path,
     process::Command,
@@ -8,17 +10,36 @@ use std::{
 // TODO: This program has way to many unwraps, these need to be removed and
 // handled appropriately
 // TODO: Handle unwrappings better.
+// TODO: We need to keep track of history
 
 fn main() {
+    let history_file_name = ".shell_history";
+    //Que for storing history commands
+    // let history_queue: VecDeque<String> = VecDeque::with_capacity(1000);
     // Start by setting current path to home directory
     let path = home::home_dir().unwrap();
     env::set_current_dir(path).unwrap();
+
+    // We need to check if the file exists
+    let file_exists = Path::new(history_file_name).exists();
+
+    if file_exists == false {
+        // Create a history file to store commands
+        match File::create(history_file_name) {
+            Ok(_) => println!("Succssfully created file"),
+            Err(_) => println!("Failed to create file"),
+        }
+    }
+
+    //TODO: we need to populate que from file by reading line by line
+    // and adding the commands into the que, should not exceed 1k commands
 
     loop {
         let mut user_input = String::new();
         print!("$ ");
 
-        io::stdout().flush().unwrap(); // Ensures it appears immediately.
+        // Ensures it appears immediately.
+        io::stdout().flush().unwrap();
         let bytes_read = io::stdin().read_line(&mut user_input).unwrap();
 
         // Check for EOF, which given null bytes should hit this.
