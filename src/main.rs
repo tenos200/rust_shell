@@ -120,8 +120,10 @@ fn main() {
         .open(history_file_name)
     {
         Ok(history_file) => {
+            // TODO: fix error with relative path.
+            // i.e., if we are trying to write to .shell_history
+            // from anything else than home it will break.
             let mut writer = BufWriter::new(history_file);
-
             for v in history_queue.iter() {
                 // figure out why we need to instansiate this???
                 let _ = write!(writer, "{}", v);
