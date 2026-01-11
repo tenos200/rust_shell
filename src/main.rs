@@ -1,8 +1,8 @@
 use std::{
     collections::VecDeque,
     env::{self},
-    fs::{File, read_to_string},
-    io::{self, Write},
+    fs::{File, OpenOptions, read_to_string},
+    io::{self, BufWriter, Write},
     path::Path,
     process::Command,
 };
@@ -14,8 +14,10 @@ use std::{
 
 fn main() {
     let history_file_name = ".shell_history";
+
     //Que for storing history commands
     let mut history_queue: VecDeque<String> = VecDeque::with_capacity(1000);
+
     // Start by setting current path to home directory
     match home::home_dir() {
         Some(path) => match env::set_current_dir(path) {
@@ -26,7 +28,7 @@ fn main() {
             }
         },
         _ => {
-            println!("error: something went wrong when fetching home directory.");
+            println!("error: when fetching home directory.");
             std::process::exit(1);
         }
     }
@@ -45,17 +47,17 @@ fn main() {
         }
     }
 
-    //TODO: we need to populate que from file by reading line by line
-    // and adding the commands into the que, should not exceed 1k commands
     for line in read_to_string(history_file_name).unwrap().lines() {
-        history_queue.push_back(line.to_string());
+        // remove this ugly addition of newline, figure out a better way to
+        // read the contents of file.
+        history_queue.push_back(line.to_string() + "\n");
     }
 
     loop {
         print!("$ ");
         let mut user_input = String::new();
 
-        // Ensures it appears immediately.
+        // Ensures it appears immediately, do we need this?
         io::stdout().flush().unwrap();
         let bytes_read = io::stdin().read_line(&mut user_input).unwrap();
 
@@ -63,8 +65,13 @@ fn main() {
         if bytes_read == 0 {
             break;
         }
+
+        // Clone string value to history queue, can we do this better?
+        history_queue.push_back(user_input.clone());
+
         // retrieve the parts of user input splitted by whitespace
         let mut parts = user_input.trim().split_whitespace();
+
         // if the command is just empty then we continue the loop
         let command: String = match parts.next() {
             Some(cmd_value) => cmd_value.to_string().to_lowercase(),
@@ -88,6 +95,13 @@ fn main() {
             "exit" | "quit" if len == 0 => {
                 break;
             }
+            "history" if len == 0 => {
+                println!("Here we print some history");
+            }
+            "!!" => {
+                println!("previous mind");
+                continue;
+            }
             _ => {
                 // This should be when we don't recognise first word as cd etc.
                 match Command::new(command).args(args).spawn() {
@@ -99,4 +113,20 @@ fn main() {
             }
         }
     }
+
+    match OpenOptions::new()
+        .write(true)
+        .truncate(true)
+        .open(history_file_name)
+    {
+        Ok(history_file) => {
+            let mut writer = BufWriter::new(history_file);
+
+            for v in history_queue.iter() {
+                // figure out why we need to instansiate this???
+                let _ = write!(writer, "{}", v);
+            }
+        }
+        Err(_) => println!("error: something went wrong when opening history file."),
+    };
 }
