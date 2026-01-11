@@ -19,19 +19,7 @@ fn main() {
     let mut history_queue: VecDeque<String> = VecDeque::with_capacity(1000);
 
     // Start by setting current path to home directory
-    match home::home_dir() {
-        Some(path) => match env::set_current_dir(path) {
-            //TODO: should we cover okay case here?
-            Ok(_) => {}
-            Err(_) => {
-                println!("Error: could not change current directory to home path.");
-            }
-        },
-        _ => {
-            println!("error: when fetching home directory.");
-            std::process::exit(1);
-        }
-    }
+    set_home_directory();
 
     // We need to check if the file exists
     // TODO: maybe move this to try_exists instead, alternatively rework with
@@ -113,6 +101,8 @@ fn main() {
             }
         }
     }
+    // set home directory first, so we always save in correct dir.
+    set_home_directory();
 
     match OpenOptions::new()
         .write(true)
@@ -120,9 +110,6 @@ fn main() {
         .open(history_file_name)
     {
         Ok(history_file) => {
-            // TODO: fix error with relative path.
-            // i.e., if we are trying to write to .shell_history
-            // from anything else than home it will break.
             let mut writer = BufWriter::new(history_file);
             for v in history_queue.iter() {
                 // figure out why we need to instansiate this???
@@ -131,4 +118,21 @@ fn main() {
         }
         Err(_) => println!("error: something went wrong when opening history file."),
     };
+}
+
+// used to set the current directory to the home directory
+fn set_home_directory() {
+    match home::home_dir() {
+        Some(path) => match env::set_current_dir(path) {
+            //TODO: should we cover okay case here?
+            Ok(_) => {}
+            Err(_) => {
+                println!("Error: could not change current directory to home path.");
+            }
+        },
+        _ => {
+            println!("error: when fetching home directory.");
+            std::process::exit(1);
+        }
+    }
 }
