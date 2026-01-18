@@ -10,7 +10,7 @@ use std::{
 // TODO: This program has way to many unwraps, these need to be removed and
 // handled appropriately
 // TODO: Handle unwrappings better.
-// TODO: We need to keep track of history
+// TODO: we need to ensure that commands are added after they are actually used.
 
 fn main() {
     let history_file_name = ".shell_history";
@@ -55,6 +55,7 @@ fn main() {
         }
 
         // Clone string value to history queue, can we do this better?
+        // TODO: this needs to be moved
         history_queue.push_back(user_input.clone());
 
         // retrieve the parts of user input splitted by whitespace
@@ -84,10 +85,12 @@ fn main() {
                 break;
             }
             "history" if len == 0 => {
-                println!("Here we print some history");
+                for (i, v) in history_queue.iter().enumerate() {
+                    print!("{}.\t{}", i + 1, v);
+                }
             }
             "!!" => {
-                println!("previous mind");
+                println!("previous command");
                 continue;
             }
             _ => {
