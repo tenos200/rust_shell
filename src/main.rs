@@ -10,7 +10,6 @@ use std::{
 // TODO: This program has way to many unwraps, these need to be removed and
 // handled appropriately
 // TODO: Handle unwrappings better.
-// TODO: we need to ensure that commands are added after they are actually used.
 
 fn main() {
     let history_file_name = ".shell_history";
@@ -58,11 +57,12 @@ fn main() {
                 break;
             }
         } else {
-            // TODO: what do we do if someone has no history file and does !!
-            // this is currently a bug where it just freezes
             user_input = match history_queue.iter().last().clone() {
                 Some(value) => value.to_string(),
-                None => "".to_string(),
+                None => {
+                    previous_cmd = false;
+                    continue;
+                }
             }
         }
 
