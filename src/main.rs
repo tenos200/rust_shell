@@ -18,6 +18,9 @@ fn main() {
     //Que for storing history commands
     let mut history_queue: VecDeque<String> = VecDeque::with_capacity(1000);
 
+    // boolean to track if previous command should be executed.
+    let mut previous_cmd = false;
+
     // Start by setting current path to home directory
     set_home_directory();
 
@@ -42,21 +45,26 @@ fn main() {
     }
 
     loop {
-        print!("$ ");
         let mut user_input = String::new();
 
-        // Ensures it appears immediately, do we need this?
-        io::stdout().flush().unwrap();
-        let bytes_read = io::stdin().read_line(&mut user_input).unwrap();
+        if previous_cmd == false {
+            print!("$ ");
+            // Ensures it appears immediately, do we need this?
+            io::stdout().flush().unwrap();
+            let bytes_read = io::stdin().read_line(&mut user_input).unwrap();
 
-        // Check for EOF, which given null bytes should hit this.
-        if bytes_read == 0 {
-            break;
+            // Check for EOF, which given null bytes should hit this.
+            if bytes_read == 0 {
+                break;
+            }
+        } else {
+            // TODO: what do we do if someone has no history file and does !!
+            // this is currently a bug where it just freezes
+            user_input = match history_queue.iter().last().clone() {
+                Some(value) => value.to_string(),
+                None => "".to_string(),
+            }
         }
-
-        // Clone string value to history queue, can we do this better?
-        // TODO: this needs to be moved
-        history_queue.push_back(user_input.clone());
 
         // retrieve the parts of user input splitted by whitespace
         let mut parts = user_input.trim().split_whitespace();
@@ -82,6 +90,8 @@ fn main() {
                 };
             }
             "exit" | "quit" if len == 0 => {
+                // we need to add this here because we exit the loop
+                history_queue.push_back(user_input.clone());
                 break;
             }
             "history" if len == 0 => {
@@ -90,7 +100,7 @@ fn main() {
                 }
             }
             "!!" => {
-                println!("previous command");
+                previous_cmd = true;
                 continue;
             }
             _ => {
@@ -103,6 +113,8 @@ fn main() {
                 }
             }
         }
+        previous_cmd = false;
+        history_queue.push_back(user_input.clone());
     }
     // set home directory first, so we always save in correct dir.
     set_home_directory();
