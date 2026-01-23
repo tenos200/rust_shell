@@ -4,12 +4,19 @@ use std::{
     fs::{File, OpenOptions, read_to_string},
     io::{self, BufWriter, Write},
     path::Path,
-    process::Command,
+    process::{Command, exit},
 };
 
 // TODO: This program has way to many unwraps, these need to be removed and
 // handled appropriately
 // TODO: Handle unwrappings better.
+// TODO: introduce a better way to handle match statements, USE ENUMS!
+
+enum CommandState {
+    Command,
+    PreviousCmd,
+    NumPreviousCmd,
+}
 
 fn main() {
     let history_file_name = ".shell_history";
@@ -18,7 +25,7 @@ fn main() {
     let mut history_queue: VecDeque<String> = VecDeque::with_capacity(1000);
 
     // boolean to track if previous command should be executed.
-    let mut previous_cmd = false;
+    let mut previous_cmd = CommandState::Command;
 
     // Start by setting current path to home directory
     set_home_directory();
@@ -46,23 +53,29 @@ fn main() {
     loop {
         let mut user_input = String::new();
 
-        if previous_cmd == false {
-            print!("$ ");
-            // Ensures it appears immediately, do we need this?
-            io::stdout().flush().unwrap();
-            let bytes_read = io::stdin().read_line(&mut user_input).unwrap();
+        match previous_cmd {
+            CommandState::Command => {
+                print!("$ ");
+                // Ensures it appears immediately, do we need this?
+                io::stdout().flush().unwrap();
+                let bytes_read = io::stdin().read_line(&mut user_input).unwrap();
 
-            // Check for EOF, which given null bytes should hit this.
-            if bytes_read == 0 {
-                break;
-            }
-        } else {
-            user_input = match history_queue.iter().last().clone() {
-                Some(value) => value.to_string(),
-                None => {
-                    previous_cmd = false;
-                    continue;
+                // Check for EOF, which given null bytes should hit this.
+                if bytes_read == 0 {
+                    break;
                 }
+            }
+            CommandState::PreviousCmd => {
+                user_input = match history_queue.iter().last().clone() {
+                    Some(value) => value.to_string(),
+                    None => {
+                        previous_cmd = CommandState::Command;
+                        continue;
+                    }
+                }
+            }
+            CommandState::NumPreviousCmd => {
+                // here we need to fetch the number and then execute
             }
         }
 
@@ -100,8 +113,14 @@ fn main() {
                 }
             }
             "!!" => {
-                previous_cmd = true;
+                previous_cmd = CommandState::PreviousCmd;
                 continue;
+            }
+            // we need to do some regex matching here or something, to
+            "!" => {
+                println!("hello");
+                previous_cmd = CommandState::NumPreviousCmd;
+                exit(1);
             }
             _ => {
                 // This should be when we don't recognise first word as cd etc.
@@ -113,7 +132,7 @@ fn main() {
                 }
             }
         }
-        previous_cmd = false;
+        previous_cmd = CommandState::Command;
         history_queue.push_back(user_input.clone());
     }
     // set home directory first, so we always save in correct dir.
@@ -133,6 +152,10 @@ fn main() {
         }
         Err(_) => println!("error: something went wrong when opening history file."),
     };
+}
+
+fn parse_bang_number(s: &str) -> Option<u64> {
+    s.strip_prefix('!')?.parse().ok()
 }
 
 // used to set the current directory to the home directory
