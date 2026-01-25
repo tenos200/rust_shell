@@ -11,6 +11,7 @@ use std::{
 // handled appropriately
 // TODO: Handle unwrappings better.
 // TODO: introduce a better way to handle match statements, USE ENUMS!
+// TODO: investigate bug, why history no rewrite the file.
 
 enum ParsedCommand {
     Cd { path: String },
@@ -55,11 +56,13 @@ impl ParsedCommand {
     fn execute(self, history: &VecDeque<String>) -> Result<Option<String>, String> {
         match self {
             ParsedCommand::RepeatLast => history
-                .back()
+                .iter()
+                .last()
                 .cloned()
                 .ok_or("No previous command".into())
                 .map(Some),
 
+            // Do we need to handle negative cases here?
             ParsedCommand::RepeatNth(n) => history
                 .get(n - 1)
                 .cloned()
@@ -75,6 +78,8 @@ impl ParsedCommand {
             }
 
             ParsedCommand::Exit => {
+                // Found the issue, it is that we are just exiting here.
+                // we need a way to find the command to actually work here..
                 std::process::exit(0);
             }
 
@@ -123,7 +128,7 @@ fn main() {
     for line in read_to_string(history_file_name).unwrap().lines() {
         // remove this ugly addition of newline, figure out a better way to
         // read the contents of file.
-        history_queue.push_back(line.to_string() + "\n");
+        history_queue.push_back(line.to_string());
     }
 
     loop {
@@ -147,16 +152,22 @@ fn main() {
                     let _ = c.execute(&history_queue);
                 }
             }
-            Ok(None) => {}
-            Err(e) => println!("tshell: {}", e),
+            Ok(None) => {
+                history_queue.push_back(input);
+            }
+            Err(e) => {
+                println!("tshell: {}", e);
+                history_queue.push_back(input);
+            }
         }
-
-        history_queue.push_back(input);
     }
 
     // set home directory first, so we always save in correct dir.
     set_home_directory();
+    write_to_file(history_queue, history_file_name);
+}
 
+fn write_to_file(history_queue: VecDeque<String>, history_file_name: &str) {
     match OpenOptions::new()
         .write(true)
         .truncate(true)
@@ -165,6 +176,7 @@ fn main() {
         Ok(history_file) => {
             let mut writer = BufWriter::new(history_file);
             for v in history_queue.iter() {
+                println!("we should now write '{}' to file", v);
                 // figure out why we need to instansiate this???
                 let _ = write!(writer, "{}", v);
             }
@@ -173,6 +185,7 @@ fn main() {
     };
 }
 
+// strips out the number after !, for numbered commands
 fn parse_bang_number(s: &str) -> Option<u64> {
     s.strip_prefix('!')?.parse().ok()
 }
@@ -181,7 +194,6 @@ fn parse_bang_number(s: &str) -> Option<u64> {
 fn set_home_directory() {
     match home::home_dir() {
         Some(path) => match env::set_current_dir(path) {
-            //TODO: should we cover okay case here?
             Ok(_) => {}
             Err(_) => {
                 println!("Error: could not change current directory to home path.");
