@@ -4,7 +4,7 @@ use std::{
     fs::{File, OpenOptions, read_to_string},
     io::{self, BufWriter, Write},
     path::Path,
-    process::{Command, exit},
+    process::Command,
 };
 
 // TODO: This program has way to many unwraps, these need to be removed and
@@ -12,10 +12,90 @@ use std::{
 // TODO: Handle unwrappings better.
 // TODO: introduce a better way to handle match statements, USE ENUMS!
 
-enum CommandState {
-    Command,
-    PreviousCmd,
-    NumPreviousCmd,
+enum ParsedCommand {
+    Cd { path: String },
+    Exit,
+    History,
+    RepeatLast,       // !!
+    RepeatNth(usize), // !10
+    External { program: String, args: Vec<String> },
+}
+
+impl ParsedCommand {
+    fn parse(input: &str) -> Option<Self> {
+        let input = input.trim();
+
+        if input == "!!" {
+            return Some(Self::RepeatLast);
+        }
+
+        if let Some(n) = parse_bang_number(input) {
+            return Some(Self::RepeatNth(n as usize));
+        }
+
+        let mut parts = input.split_whitespace();
+        let cmd = parts.next()?;
+
+        match cmd {
+            "cd" => {
+                let path = parts.collect::<Vec<_>>().join(" ");
+                Some(Self::Cd { path })
+            }
+            "exit" | "quit" => Some(Self::Exit),
+            "history" => Some(Self::History),
+            _ => Some(Self::External {
+                program: cmd.to_string(),
+                args: parts.map(String::from).collect(),
+            }),
+        }
+    }
+}
+
+impl ParsedCommand {
+    fn execute(self, history: &VecDeque<String>) -> Result<Option<String>, String> {
+        match self {
+            ParsedCommand::RepeatLast => history
+                .back()
+                .cloned()
+                .ok_or("No previous command".into())
+                .map(Some),
+
+            ParsedCommand::RepeatNth(n) => history
+                .get(n - 1)
+                .cloned()
+                .ok_or("History index out of range".into())
+                .map(Some),
+
+            ParsedCommand::Cd { path } => {
+                match env::set_current_dir(path) {
+                    Ok(_) => println!("Successfully changed current dir"),
+                    Err(_) => println!("cd: No such file or directory"),
+                };
+                Ok(None)
+            }
+
+            ParsedCommand::Exit => {
+                std::process::exit(0);
+            }
+
+            ParsedCommand::History => {
+                for (i, cmd) in history.iter().enumerate() {
+                    print!("{}.\t{}", i + 1, cmd);
+                }
+                Ok(None)
+            }
+
+            ParsedCommand::External { program, args } => {
+                match Command::new(program).args(args).spawn() {
+                    Ok(mut child) => {
+                        child.wait().expect("Could not execute");
+                    }
+                    Err(_) => println!("tshell: command not found."),
+                }
+                Ok(None)
+            }
+        }
+    }
 }
 
 fn main() {
@@ -24,10 +104,6 @@ fn main() {
     //Que for storing history commands
     let mut history_queue: VecDeque<String> = VecDeque::with_capacity(1000);
 
-    // boolean to track if previous command should be executed.
-    let mut previous_cmd = CommandState::Command;
-
-    // Start by setting current path to home directory
     set_home_directory();
 
     // We need to check if the file exists
@@ -51,90 +127,33 @@ fn main() {
     }
 
     loop {
-        let mut user_input = String::new();
+        print!("$ ");
+        io::stdout().flush().unwrap();
 
-        match previous_cmd {
-            CommandState::Command => {
-                print!("$ ");
-                // Ensures it appears immediately, do we need this?
-                io::stdout().flush().unwrap();
-                let bytes_read = io::stdin().read_line(&mut user_input).unwrap();
-
-                // Check for EOF, which given null bytes should hit this.
-                if bytes_read == 0 {
-                    break;
-                }
-            }
-            CommandState::PreviousCmd => {
-                user_input = match history_queue.iter().last().clone() {
-                    Some(value) => value.to_string(),
-                    None => {
-                        previous_cmd = CommandState::Command;
-                        continue;
-                    }
-                }
-            }
-            CommandState::NumPreviousCmd => {
-                // here we need to fetch the number and then execute
-            }
+        let mut input = String::new();
+        if io::stdin().read_line(&mut input).unwrap() == 0 {
+            break;
         }
 
-        // retrieve the parts of user input splitted by whitespace
-        let mut parts = user_input.trim().split_whitespace();
-
-        // if the command is just empty then we continue the loop
-        let command: String = match parts.next() {
-            Some(cmd_value) => cmd_value.to_string().to_lowercase(),
+        let cmd = match ParsedCommand::parse(&input) {
+            Some(c) => c,
             None => continue,
         };
 
-        let args = parts.clone();
-        let len = parts.count();
-
-        match command.as_str() {
-            "cd" => {
-                let path_str = args.collect::<Vec<_>>().join(" ");
-                let new_dir = Path::new(&path_str);
-                // this how you change current dir just need to construt
-                // it from a string
-                match env::set_current_dir(new_dir) {
-                    Ok(_) => println!("Successfully changed current dir"),
-                    Err(_) => println!("cd: No such file or directory"),
-                };
-            }
-            "exit" | "quit" if len == 0 => {
-                // we need to add this here because we exit the loop
-                history_queue.push_back(user_input.clone());
-                break;
-            }
-            "history" if len == 0 => {
-                for (i, v) in history_queue.iter().enumerate() {
-                    print!("{}.\t{}", i + 1, v);
+        match cmd.execute(&history_queue) {
+            Ok(Some(expanded)) => {
+                // execute expanded history command
+                if let Some(c) = ParsedCommand::parse(&expanded) {
+                    let _ = c.execute(&history_queue);
                 }
             }
-            "!!" => {
-                previous_cmd = CommandState::PreviousCmd;
-                continue;
-            }
-            // we need to do some regex matching here or something, to
-            "!" => {
-                println!("hello");
-                previous_cmd = CommandState::NumPreviousCmd;
-                exit(1);
-            }
-            _ => {
-                // This should be when we don't recognise first word as cd etc.
-                match Command::new(command).args(args).spawn() {
-                    Ok(mut child) => {
-                        child.wait().expect("Could not execute");
-                    }
-                    Err(_) => println!("tshell: command not found."),
-                }
-            }
+            Ok(None) => {}
+            Err(e) => println!("tshell: {}", e),
         }
-        previous_cmd = CommandState::Command;
-        history_queue.push_back(user_input.clone());
+
+        history_queue.push_back(input);
     }
+
     // set home directory first, so we always save in correct dir.
     set_home_directory();
 
